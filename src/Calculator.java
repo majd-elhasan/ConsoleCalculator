@@ -21,14 +21,19 @@ public class Calculator {
     String Calculate(String exp){
         this.exp = exp;
         checkParenthesesSets(this.exp);
-        // 1. parentheses
-        while (this.exp.contains("(")){
-            this.exp = parentheses(this.exp);
+        this.exp = calculateTheExpression(this.exp);
+        if (exp.charAt(0) =='+')
+            return this.exp.substring(1);
+        return this.exp;
+    }
+    String calculateTheExpression(String exp){
+        while (exp.contains("(")){
+            exp = parentheses(exp);
         }
         // 2. powers and roots
-        this.exp = multiplyOrDivide(this.exp);
-        this.exp = addAndSubtract(this.exp);
-        return this.exp;
+        exp = multiplyOrDivide(exp);
+        exp = addAndSubtract(exp);
+        return exp;
     }
     void checkParenthesesSets(String expression){
         Stack<Character> parentheses = new Stack<>();
@@ -81,16 +86,16 @@ public class Calculator {
                 }
             }
             isNegative = false;
-            String result = parentheses(innerExp);
+
+            StringBuilder result = new StringBuilder(calculateTheExpression(innerExp));
             sb.delete(i,innerExp.length()+i+2);
-            sb.insert(i,result);
+            if (i>0 && sb.charAt(i-1)=='+' && result.charAt(0)=='+')
+                sb.insert(i,result.substring(1));
+            else
+                sb.insert(i,result);
             if (IsMultiplied) sb.insert(i,'*');
             exp = sb.toString();
-            return exp;
         }
-        // powers and roots
-        exp = multiplyOrDivide(exp);
-        exp = addAndSubtract(exp);
         return exp;
     }
     String multiplyOrDivide(String exp){
