@@ -1,5 +1,4 @@
 import java.util.Stack;
-
 public class Calculator {
     String exp ;
     Double previousNum ;
@@ -12,25 +11,51 @@ public class Calculator {
             default -> false;
         };
     }
-    boolean isSign(char c){
+    boolean isRootSign(char c){
         return switch (c){
-            case '/','*','+','-' -> true;
+            case 'v','V','√' -> true;
+            default -> false;
+        };
+    }
+    boolean containsRootSign(String exp){
+        for (int i = 0;i<exp.length();i++){
+            if (isRootSign(exp.charAt(i)))
+                return true;
+        }
+        return false;
+    }
+    boolean isPlusOrMinus(char c){
+        return switch (c){
+            case '+','-' -> true;
             default -> false;
             };
     }
     String Calculate(String exp){
         this.exp = exp;
         checkParenthesesSets(this.exp);
-        this.exp = calculateTheExpression(this.exp);
-        if (exp.charAt(0) =='+')
-            return this.exp.substring(1);
+        double roundingNum = Math.pow(10,9);
+        try {
+            this.exp = calculateTheExpression(this.exp);
+            if (Double.parseDouble(this.exp)!= Double.POSITIVE_INFINITY &&
+                    Double.parseDouble(this.exp)!= Double.NEGATIVE_INFINITY &&
+                    !Double.isNaN(Double.parseDouble(this.exp)))
+                this.exp = String.valueOf(Math.round(Double.parseDouble(this.exp)*roundingNum)/roundingNum);
+        }catch (Exception e){
+            System.out.println(e.getMessage());
+        }
+
+        if (this.exp.charAt(0) =='+')
+            this.exp = this.exp.substring(1);
+        if (this.exp.substring(this.exp.length()-2).equals(".0"))
+            this.exp = this.exp.substring(0,this.exp.length()-2);
+
         return this.exp;
     }
     String calculateTheExpression(String exp){
         while (exp.contains("(")){
             exp = parentheses(exp);
         }
-        // 2. powers and roots
+        exp = powerAndRoot(exp);
         exp = multiplyOrDivide(exp);
         exp = addAndSubtract(exp);
         return exp;
@@ -62,11 +87,11 @@ public class Calculator {
                         break;
                 }
             }
-            boolean IsMultiplied = false;
+            boolean IsMultipliedByPrev = false;
             String innerExp = exp.substring(i+1, j);
             StringBuilder sb = new StringBuilder(exp);
             if (i>0 && isDigit(exp.charAt(i-1))) {
-                IsMultiplied = true;
+                IsMultipliedByPrev = true;
             }else if ( i>0 && (exp.charAt(i-1)=='-' || exp.charAt(i-1)=='+')){
                 int x;
                 for (x = i-1;x>=0;x--){
@@ -93,10 +118,20 @@ public class Calculator {
                 sb.insert(i,result.substring(1));
             else
                 sb.insert(i,result);
-            if (IsMultiplied) sb.insert(i,'*');
+            if (IsMultipliedByPrev) sb.insert(i,'*');
+            if (i+result.length()<sb.length() && isDigit(sb.charAt(i+result.length()))) {
+                sb.insert(i+result.length(),'*');
+            }
             exp = sb.toString();
         }
         return exp;
+    }
+    String powerAndRoot(String exp){
+        char power = '^';char squareRoot = 'v';
+        exp = exceptionAssistant(power,squareRoot,exp);
+        if (!exp.contains("^") && !containsRootSign(exp))
+            return exp;
+        return powerAndRoot(exp);
     }
     String multiplyOrDivide(String exp){
         char multiply = '*';char divide = '/';
@@ -114,7 +149,7 @@ public class Calculator {
                 passedFirstNum = true;
                 if (passedFirstSign) return true;
             }
-            else if (isSign(exp.charAt(i)) && passedFirstNum)
+            else if (isPlusOrMinus(exp.charAt(i)) && passedFirstNum)
                 passedFirstSign = true;
         }
         return false;
@@ -122,15 +157,32 @@ public class Calculator {
     String addAndSubtract(String exp){
         char plus = '+';char minus='-';
         exp = exceptionAssistant(plus,minus,exp);
-        // if length of exp is equal to 1 ,no need to check for '-' sign after the first index , anyway we can't because of the substring method working mechanism
-        if (!hasTwoNumber(exp))
-            return exp;
+
+        // if length of exp is equal to 1 ,no need to check for '-' sign after the first index
+        if (!hasTwoNumber(exp)){
+            // here if we have more than one sign ('+' and '-') we manage them to have - if sum of - signs is odd
+            int i=0;
+            for (;i<exp.length();i++){
+                if (isPlusOrMinus(exp.charAt(i))){
+                    if (exp.charAt(i) =='-')
+                        isNegative = !isNegative;
+                }else break;
+            }
+            if (isNegative) {
+                isNegative = false;
+                return "-" + exp.substring(i);
+            }
+            return exp.substring(i);
+        }
         return addAndSubtract(exp);
     }
+    boolean isSignsSequenceCorrect(char s , char s2){
+        return (s != '-' && s != '+' && !isRootSign(s) && s != '*' && s != '/') || (s2 != '*' && s2 != '/' && s2 != '^');
+    }
     String exceptionAssistant(char a,char b,String exp){
-        if((a=='*' || a =='/') && exp.charAt(0)==a)
+        if((a=='*' || a =='/' || a=='^') && exp.charAt(0)==a)
             throw new UnKnownSignException("you can not type '"+exp.charAt(0)+"' at the beginning of the expression !");
-        if (exp.contains(a+"") || exp.contains(b+"")) {
+        if (exp.contains(a+"") || exp.contains(b+"") || ((isRootSign(a) || isRootSign(b)))) {  // TODO -> contain 'V' ?
             int i;
             boolean passedDigit =false;
             for (i = 0; i < exp.length(); i++) {
@@ -139,9 +191,13 @@ public class Calculator {
                 if(isDigit(exp.charAt(i)))
                     passedDigit = true;
             }
+            if (isRootSign(exp.charAt(0)))
+                i = 0;
             if(i<exp.length()) {
-                if (( exp.charAt(i) == '-' || exp.charAt(i) == '+') &&( exp.charAt(i + 1) == '*' || exp.charAt(i + 1) == '/' || exp.charAt(i + 1) == '^'))
+                if (!isSignsSequenceCorrect(exp.charAt(i),exp.charAt(i+1)))
                     throw new UnKnownSignException("you can not type '" + exp.charAt(i) + "' directly before '" + exp.charAt(i + 1) + "' !");
+                if (isRootSign(exp.charAt(i)) && isRootSign(exp.charAt(i+1)))
+                    exp ="√"+ powerAndRoot(exp.substring(i+1));
                 exp = assistant(exp,i);
             }
         }
@@ -159,7 +215,11 @@ public class Calculator {
                 num.append(exp.charAt(n));
         }
         if (!(num.toString().contains(".".repeat(0)) || num.toString().contains(".".repeat(1)))) throw new RuntimeException("the number should not have two dots in it !");
-        previousNum = Double.parseDouble(num.toString());
+        // for root sign we do not need previous number
+        if(num.toString().isEmpty())
+            previousNum = 0d;
+        else
+            previousNum = Double.parseDouble(num.toString());
         while (p!=0 && (exp.charAt(p-1) =='-' || exp.charAt(p-1) =='+') ) {
             if(exp.charAt(p-1) =='-' )
                 isNegative = !isNegative;
@@ -180,7 +240,12 @@ public class Calculator {
         for ( ii = n;ii<exp.length() && (isDigit(exp.charAt(ii)) || exp.charAt(ii) == '.');ii++){
              num2.append(exp.charAt(ii));
         }
+        if(exp.startsWith("Infinity", n)){
+            num2.append("Infinity");
+            ii += "Infinity".length();
+        }
         nextNum = Double.parseDouble(num2.toString());
+        if (isNegative) nextNum = -nextNum;
         StringBuilder sb = new StringBuilder(exp);
         sb.delete(lowerIndex,ii);
         String calculated;
@@ -190,7 +255,14 @@ public class Calculator {
             case '/' -> D_Calculated = (previousNum/nextNum);
             case '+' -> D_Calculated = (previousNum+nextNum);
             case '-' -> D_Calculated = (previousNum-nextNum);
+            case '^' -> D_Calculated = Math.pow(previousNum,nextNum);
         }
+        if (isRootSign(sign)){
+            D_Calculated = Math.sqrt(nextNum);
+            if (Double.isNaN(D_Calculated))
+                throw new ArithmeticException("you can not take the root of a negative number !");
+        }
+
         calculated = D_Calculated+"";
         String signToBeInserted = D_Calculated<0 && (exp.charAt(lowerIndex)=='+')?"":"+";
         sb.insert(lowerIndex,signToBeInserted + calculated);
